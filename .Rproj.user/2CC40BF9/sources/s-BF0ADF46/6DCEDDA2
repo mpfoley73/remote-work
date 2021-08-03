@@ -1,9 +1,9 @@
 {
     "id": "6DCEDDA2",
-    "path": "C:/GitHub/remote-work/2. Explore.Rmd",
-    "project_path": "2. Explore.Rmd",
+    "path": "C:/GitHub/remote-work/2_explore.Rmd",
+    "project_path": "2_explore.Rmd",
     "type": "text",
-    "hash": "0",
+    "hash": "3354843314",
     "contents": "",
     "dirty": false,
     "created": 1627822070586.0,
@@ -23,7 +23,7 @@
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1627946473982,
+    "last_content_update": 1627946473,
     "read_only": false,
     "read_only_alternatives": []
 }
