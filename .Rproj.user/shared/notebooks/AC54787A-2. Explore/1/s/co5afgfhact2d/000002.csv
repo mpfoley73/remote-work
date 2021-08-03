@@ -1,0 +1,20 @@
+"0","buffer %>% select(-c(country, recommend_remote, prefer_remote, race,
+                     work_exp, remote_exp, emp_type, pct_remote, covid,
+                     disability, fte, caregiver)) %>% 
+  glimpse()
+"
+"1","Rows: 2,218"
+"1",""
+"1","
+"
+"1","Columns: 4"
+"1",""
+"1","
+"
+"1","$ industry <fct> Education, Software, IT and Services, Other, IT and Services, Software, IT and Services, Software, Fina~
+$ role     <fct> Leadership, Other, Sales, Leadership, CSR, Engineering, Leadership, Product, Operations, Engineering, M~
+$ struggle <fct> Distractions, Collaboration, Distractions, Unplugging, Unplugging, Motivation, Motivation, Timezones, C~
+$ benefit  <fct> Time with Family, No Commute, Time with Family, Flexible Location, Flexible Location, Flexible Location~"
+"1",""
+"1","
+"

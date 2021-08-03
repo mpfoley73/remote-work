@@ -1,0 +1,249 @@
+---
+title: "Remote Work"
+subtitle: "Section 2: Data Exploration"
+author: "Michael Foley"
+date: "8/1/2021"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: haddock
+    fig_width: 9
+    fig_caption: false
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(ggtext)
+library(janitor)
+library(flextable)
+library(patchwork)
+
+buffer <- readRDS("./buffer.rds")
+codebook <- readRDS("./codebook.rds")
+```
+
+My objective is to learn how the struggles with remote work differ among workers. "Not being able to unplug" is the largest reported struggle. "Difficulties with collaboration and communication" is second, followed by "Loneliness", "Distractions at home", and "Staying motivated". "Being in a different timezone than teammates" was least reported struggle.
+
+```{r fig.height=3.5, fig.width=7}
+buffer %>%
+  count(struggle) %>%
+  mutate(pct = n / sum(n),
+         struggle = fct_reorder(struggle, pct),
+         struggle = fct_relevel(struggle, "Other", after = 0)) %>%
+  ggplot(aes(x = struggle, y = n)) +
+  geom_col(fill = "lightsteelblue", color = "steelblue") +
+  geom_text(aes(label = scales::percent(pct, accuracy = 1)), 
+            size = 3, nudge_y = -20, color = "#333333") +
+  coord_flip() +
+  theme_light() +
+  labs(x = NULL, y = NULL,
+       title = "Unplugging is top struggle with remote work.",
+       subtitle = codebook %>% filter(item == "struggle") %>% pull(desc),
+       caption = "Source: buffer.com/2021-state-of-remote-work.")
+```
+
+```{r}
+plot_prop <- function(x, grp_var, grp_title) {
+  grp_var <- ensym(grp_var)
+  x %>%
+    filter(struggle != "Other") %>%
+    count(struggle, !!grp_var) %>%
+    group_by(!!grp_var) %>%
+    mutate(pct = n / sum(n)) %>%
+    ggplot(aes(x = fct_rev(!!grp_var), y = pct)) +
+    geom_col(fill = "lightsteelblue", color = "steelblue") +
+    geom_text(aes(label = n), size = 3, nudge_y = -.03) +
+    scale_y_continuous(labels = scales::percent_format()) +
+    coord_flip() +
+    theme_light() +
+    theme(strip.background = element_rect(fill = "gray90"),
+          strip.text = element_text(color = "steelblue")) +
+    labs(title = grp_title, 
+         subtitle = codebook %>% filter(item == grp_var) %>% pull(desc),
+         y = NULL, x = NULL, fill = NULL) +
+    facet_wrap(facets = vars(struggle))
+}
+```
+
+# Preference for Remote Work
+
+The overwhelming majority of all survey respondents prefer to indefinitely continue remote work, at least some of the time. It's important to keep this in context because we are looking at the struggles among workers who overwhelming think they are worth the benefits.
+
+```{r fig.height=4, fig.width=7}
+p1 <- buffer %>%
+  ggplot(aes(x = fct_rev(struggle), fill = prefer_remote)) +
+  geom_bar(color = "gray70") +
+  coord_flip() +
+  theme_light() +
+  scale_fill_manual(values = c("lightgoldenrod", "lightsteelblue")) +
+  theme(legend.position = "top") +
+  guides(fill = guide_legend(reverse=TRUE)) +
+  labs(subtitle = codebook %>% filter(item == "prefer_remote") %>% pull(desc),
+       y = NULL, x = NULL, fill = NULL) +
+  theme(
+    plot.subtitle = element_textbox_simple(
+      size = 10,
+      lineheight = 1,
+      padding = margin(5.5, 5.5, 5.5, 5.5),
+      margin = margin(0, 0, 5.5, 0),
+      fill = "#FFFFFF"
+    )
+  )
+
+p2 <- buffer %>%
+  ggplot(aes(x = fct_rev(struggle), fill = recommend_remote)) +
+  geom_bar(color = "gray70") +
+  coord_flip() +
+  theme_light() +
+  scale_fill_manual(values = c("lightgoldenrod", "lightsteelblue")) +
+  theme(legend.position = "top") +
+  guides(fill = guide_legend(reverse=TRUE)) +
+  labs(subtitle = codebook %>% filter(item == "recommend_remote") %>% pull(desc),
+       y = NULL, x = NULL, fill = NULL) +
+  theme(
+    plot.subtitle = element_textbox_simple(
+      size = 10,
+      lineheight = 1,
+      padding = margin(5.5, 5.5, 5.5, 5.5),
+      margin = margin(0, 0, 5.5, 0),
+      fill = "#FFFFFF"
+    )
+  )
+
+p1 + p2 +
+  plot_annotation(title = "Nearly everyone prefers and recommends remote work.",
+                  caption = "Source: buffer.com/2021-state-of-remote-work.")
+```
+
+## Race
+
+All racial groups shared a common struggle with "Not being able to unplug". Black and Asian were relatively more likely to cite "Distractions at home". Multiracial workers were relatively more likely to cite "Loneliness".
+
+```{r}
+buffer %>% plot_prop("race", 
+                     "Black and Asian struggle more with distractions.")
+```
+
+## Work Experience
+
+New workers (less then six months) were more likely to cite struggling with motivation. After six months, workers struggled a great deal with loneliness, but with diminishing rate as work experience increased. Struggling to unplug was positively associated with experience.
+
+```{r}
+buffer %>% plot_prop("work_exp", 
+                     "Work experience associated with unplugging, loneliness.")
+```
+
+## Remote Work Experience
+
+Experience with remote work followed a similar pattern to overall work experience, except that the relationship with loneliness disappears.
+
+```{r}
+buffer %>% plot_prop("remote_exp", 
+                     "Remote work experience less accociated with motivation struggles.")
+```
+
+## Employment Type
+
+Distractions were a bigger problem for business owners and the self-employed than for regular employees. Employees were relatively more likely to struggle with collaboration.
+
+```{r fig.height=3.1, fig.width=7.3}
+buffer %>% plot_prop("emp_type", 
+                     "Distractions a bigger problem for business owners and the self-employed.")
+```
+
+## Percent Remote
+
+Organizations where more than half the employees are remote struggle more.
+
+```{r fig.height=3.9, fig.width=7.3}
+buffer %>% plot_prop("pct_remote", 
+                     "Employees increasingly struggle to collaborate as remote work grows.")
+```
+
+## COVID
+
+Working remotely as a result of COVID was closely tied to collaboration issues, and inversely related to timezone issues.
+
+```{r fig.height=3.0, fig.width=7.3}
+buffer %>% plot_prop("covid", 
+                     "Covid-induced remote work is related to collaboration issues.")
+```
+
+## Disability
+
+Having a disability or chronic illness had little effect on the types of struggles workers experience.
+
+```{r fig.height=3.0, fig.width=7.3}
+buffer %>% plot_prop("disability", 
+                     "Disabilities and illness not related to remote work struggles.")
+```
+
+## Caregivers
+
+Parents and caregivers were much more likely to struggle with distractions. The upside is that they were also less likely to feel lonely.
+
+```{r fig.height=3.0, fig.width=7.3}
+buffer %>% plot_prop("caregiver", 
+                     "Caregivers were more distracted, but less lonely.")
+```
+
+## Full-time Employees
+
+Smaller organizations struggle with distractions, motivation; bigger with unplugging
+
+```{r fig.height=5.2, fig.width=7.3}
+buffer %>% plot_prop("fte", 
+                     "Smaller organizations struggle with distractions; bigger with unplugging.")
+```
+
+## Industry
+
+Struggles are farely common across industries. Government predictably does not deal with time zone issues.
+
+```{r fig.height=8, fig.width=7.3}
+buffer %>% plot_prop("industry", 
+                     "Struggles span industries.")
+```
+
+## Role
+
+Struggles are farely common across job roles. Sales roles predictably do not deal with collaboration issues.
+
+```{r fig.height=8.0, fig.width=7.3}
+buffer %>% plot_prop("role", 
+                     "Struggles span roles.")
+```
+
+## Conclusions
+
+What factors are likely to lead to each of the struggles?
+
+```{r}
+# mtrx_race <- buffer %>% count(struggle, level = race) %>% 
+#   group_by(level) %>%
+#   mutate(pct = n / sum(n)) %>%
+#   filter(n >= 10 & )
+#   pivot_wider(names_from = struggle, values_from = n) %>% 
+#   mutate(level = as.character(level))
+# mtrx_work <- buffer %>% count(struggle, level = work_exp) %>% 
+#   pivot_wider(names_from = struggle, values_from = n) %>% 
+#   mutate(level = as.character(level)
+# 
+# mtrx <- bind_rows(Race = mtrx_race,
+#                   `Work Experience` = mtrx_work,
+#                   .id = "Factor")
+# 
+# mtrx %>%
+#   flextable() %>%
+#   merge_v(j = 1) %>%
+#   autofit() %>%
+#   theme_zebra()
+```
+

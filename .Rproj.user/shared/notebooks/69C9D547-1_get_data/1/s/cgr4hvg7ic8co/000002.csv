@@ -1,0 +1,3 @@
+"0","codebook %>% "
+"0","  filter(str_detect(item, ""^pay|(time_zones)|(^asynch)"")) %>%"
+"0","  select(-resp_type)"

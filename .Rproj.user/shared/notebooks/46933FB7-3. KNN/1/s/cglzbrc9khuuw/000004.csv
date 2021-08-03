@@ -1,0 +1,7 @@
+"0","yardstick::gain_curve(preds_knn, Actual) %>%
+  autoplot() +
+  labs(title = ""Bagging Model Gain Curve on Test Data"")
+"
+"2","Error: No valid variables provided to `...`.
+[90mRun `rlang::last_error()` to see where the error occurred.[39m
+"

@@ -1,0 +1,6 @@
+"0","codebook %>% "
+"0","  select(-resp_type) %>%"
+"0","  flextable() %>%"
+"0","  autofit() %>%"
+"0","  theme_zebra() %>%"
+"0","  set_caption(""Codebook."")"

@@ -1,0 +1,142 @@
+---
+title: "KNN"
+author: "Michael Foley"
+date: "8/1/2021"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: haddock
+    fig_width: 9
+    fig_caption: false
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(ggtext)
+library(janitor)
+library(flextable)
+library(caret)
+library(recipes)
+
+buffer <- readRDS("./buffer.rds")
+codebook <- readRDS("./codebook.rds")
+```
+
+K-nearest neighbors (KNN) algorithm is a type of supervised ML algorithm that classifies observations by the "majority vote" of its *k* nearest neighbors. The value of *k* is a hyperparameter to optimize.
+
+KNN is a non-parametric model, meaning it makes no assumptions about the underlying data. This is often an advantage in cases where data does not follow standard distributions. KNN is also "lazy" algorithm in that it uses the training data set data to classify future responses rather than using it to create classification rules.
+
+## Set Up Workflow
+
+I'll partition my data into an 80:20 train:test split.
+
+```{r}
+set.seed(801)
+train_idx <- createDataPartition(buffer$struggle, p = 0.8, list = FALSE)
+dat_train <- buffer[train_idx, ]
+dat_test <- buffer[-train_idx, ]
+```
+
+and train a model with 10-fold CV. 
+
+```{r}
+train_control <- trainControl(
+  method = "cv", 
+  number = 10,
+  savePredictions = "final",
+  classProbs = TRUE
+)
+```
+
+## Prep Model
+
+My model data set variables are `struggle` + and 15 predictors. I'll drop the character `country` column, plus the less-informative `role` and `industry` columns.
+
+```{r}
+mdl_vars <- dat_train %>% select(-c(country, role, industry)) %>% colnames()
+mdl_vars
+```
+
+I'll use the recipe method to train.
+
+```{r}
+rcpe <- recipe(struggle ~ ., data = dat_train[, mdl_vars]) %>%
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_center(all_predictors()) %>%
+  step_scale(all_predictors())
+
+prep(rcpe, training = dat_train)
+dat_train %>% select(all_nominal())
+```
+
+## Fit KNN
+
+The KNN model has a single hyperparameter to fit: *K*.
+
+```{r message=FALSE}
+set.seed(1970)
+# mdl_knn <- train(
+#   rcpe,
+#   data = dat_train[, mdl_vars],
+#   # method = "knn",
+#   method = "rpart",
+#   trControl = train_control,
+#   tuneGrid = expand.grid(k = c(25, 50, 100, 150, 200, 250, 300, 350)),
+#   metric = "Accuracy"
+# )
+mdl_knn <- train(
+  rcpe,
+  data = dat_train[, mdl_vars],
+  method = "rpart",
+  trControl = train_control,
+  tuneLength = 5,
+  metric = "Accuracy"
+)
+
+mdl_knn
+```
+
+Prediction accuracy was maximized at *K* = 250. Kappa was maximized 50.
+
+```{r}
+plot(mdl_knn)
+```
+
+## Resampling Performance
+
+The accuracy from the confusion matrix is 0.8403.
+
+```{r}
+confusionMatrix(mdl_knn)
+```
+
+## Holdout Performance
+
+Here is the model performance on the holdout data set.
+
+```{r}
+preds_knn <- bind_cols(
+  dat_test,
+  predict(mdl_knn, newdata = dat_test, type = "prob"),
+  Predicted = predict(mdl_knn, newdata = dat_test, type = "raw"),
+  Actual = dat_test$struggle
+)
+
+confusionMatrix(preds_knn$Predicted, 
+                reference = preds_knn$Actual)
+```
+## Model Evaluation
+
+`varImp()` ranks the predictors by the sum of the reduction in the loss function attributed to each variable at each split. The most important variable here was `FarePerPass`. In the straight logistic regression model, it was `NetSurv`, followed by `Pclass`.
+
+```{r fig.height=100, fig.width=15}
+plot(varImp(mdl_knn), main = "Boosting Variable Importance")
+```
+

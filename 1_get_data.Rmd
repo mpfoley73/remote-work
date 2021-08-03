@@ -1,0 +1,358 @@
+---
+title: "Struggles with Remote Work"
+subtitle: "Section 1: Intro and Data"
+author: "Michael Foley"
+date: "8/1/2021"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: haddock
+    fig_width: 9
+    fig_caption: false
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+library(tidyverse)
+library(flextable())
+library(mice)
+library(patchwork)
+```
+
+Buffer published [The 2021 State of Remote Work](https://buffer.com/2021-state-of-remote-work), a summary of a survey of over 2,000 remote workers in late 2020. The report was a follow up to the [2020 report](https://lp.buffer.com/state-of-remote-work-2020) which was featured in [MakeoverMonday](https://data.world/makeovermonday/2020w32). Buffer made the [2021 report data]("https://docs.google.com/spreadsheets/d/1aJFW-_Rq3xNa2Fos-raoA1sF23CwT9sLAfHopjMZnLs/edit?usp=sharing") available as a Google sheets file on Google Docs.
+
+The Buffer survey found that workers overwhelmingly support remote work. However, they did share struggles such as difficulty unplugging from the office, collaborating, and loneliness. I am curious what factors impact their struggles. 
+
+In this section, I pull the 2021 report data from Google Docs and prepare it for analysis in the  subsequent sections. Subsequent sections explore and analyze the survey results.
+
+```{r include=FALSE, class.source='fold-hide'}
+buffer_url <- "https://docs.google.com/spreadsheets/d/1aJFW-_Rq3xNa2Fos-raoA1sF23CwT9sLAfHopjMZnLs/edit?usp=sharing"
+
+codebook <- tribble(
+  ~item, ~desc, ~resp_type,
+  "country", "What country do you live in currently?", "c",
+  "industry", "What industry do you work in?", "c",
+  "industry_other", "Other", "c",
+  "role", "In the following list, what best describes the work you do?", "c",
+  "role_other", "Other", "c",
+  "race", "Which of the following best describes you?", "c",
+  "race_other", "Other", "c",
+  "work_exp", "How long have you been in the workforce?", "c",
+  "remote_exp", "How long have you worked remotely?", "c",
+  "disability", "Do you have a disability or chronic illness?", "d",
+  "disability_remote", "Is a disability or chronic illness one of the reasons you pursued remote work?", "d",
+  "caregiver", "Are you a parent or caregiver?", "d",
+  "caregiver_remote", "Is being a parent or caregiver one of the reasons you pursued remote work?", "d",
+  "prefer_remote", "Would you like to work remotely, at least some of the time, for the rest of your career?", "d",
+  "recommend_remote", "Would you recommend remote work to others?", "d",
+  "struggle", "What’s your biggest struggle with working remotely?", "c",
+  "struggle_other", "Other", "c",
+  "benefit", "What’s the biggest benefit you see to working remotely?", "c",
+  "benefit_other", "Other", "c",
+  "covid", "Are you working remotely as a result of COVID-19?", "d",
+  "permanent", "Is your company planning on permanently allowing remote work?", "c",
+  "return", "When will you be returning to your workspace and no longer be allowed to work remotely?", "c",
+  "smooth", "Was your company's transition to remote work smooth?", "d",
+  "smooth_why", "What made it smooth?", "c",
+  "smooth_not", "Why not?", "c",
+  "change", "What has changed the most about your work now that you work remotely?", "c",
+  "change_other", "Other", "c",
+  "work_less_more", "Would you say you are working less or more now that you work remotely?", "c",
+  "meet_more", "Do you find you are in more meetings as a result of the shift to remote work?", "d",
+  "other_changes", "Is there anything else you'd like to add about how your work has changed now that you work remotely?", "c",
+  "emp_type", "Which description best suits you?", "c",
+  "time_zones", "Is your company operating in multiple time zones?", "d",
+  "time_zones_cnt", "How many time zones do employees at your company span?", "c",
+  "time_zones_team", "Are people on your immediate team in multiple time zones?", "d",
+  "asynch", "Does your company encourage asynchronous communication?", "d",
+  "fte", "How many full-time employees does your company have?", "c",
+  "pct_remote", "What percentage of your company works remotely?", "c",
+  "pay_internet", "If you work from home, does your company pay for your home internet?", "c",
+  "pay_cell", "Does your company pay for your cell phone?", "c",
+  "pay_membership", "Does your company cover the cost of a coworking membership?", "c",
+  "pay_computer", "Does your company cover your necessary hardware needs?", "c",
+  "pay_software", "Does your company cover your necessary software needs?", "c",
+  "pay_other", "Are there any other costs of working remotely that your company covers?", "c",
+  "other", "Anything else you want to add that we didn’t ask about?", "c"
+)
+```
+
+## File Download
+
+The file is located on Google Docs.
+
+```{r collapse=TRUE}
+# not using a private sheet, so no need for token
+googlesheets4::gs4_deauth() 
+
+buffer_0 <- googlesheets4::read_sheet(
+  buffer_url,
+  range = "CompleteData!B3:AS2248",
+  col_names = codebook$item,
+  col_types = paste(codebook$resp_type, collapse = ""))
+
+dim(buffer_0)
+```
+
+I hand-made a code book to translate the full question text into short variable names. There are 44 variables in the data file.
+
+```{r}
+codebook %>% 
+  select(-resp_type) %>%
+  flextable() %>%
+  autofit() %>%
+  theme_zebra() %>%
+  set_caption("Codebook.")
+```
+
+## Delete Empty Rows
+
+Several records are completely empty. They are easily spotted as having no value in the first column (country).
+
+```{r}
+buffer_1 <- buffer_0 %>%
+  filter(!is.na(country))
+
+dim(buffer_1)
+```
+
+There were `r (nrow(buffer_0) - nrow(buffer_1)) %>% scales::comma()` empty rows. Removing them reduces our data set from `r nrow(buffer_0) %>% scales::comma()` rows to `r nrow(buffer_1) %>% scales::comma()` rows. 
+
+## Remove "Other" Cols
+
+Several multiple-choice questions have a free-form "other" option and an accompanying variable for the free-form text response. 
+
+```{r}
+codebook %>% 
+  filter(str_detect(item, "other") & !(item %in% c("other", "pay_other"))) %>%
+  select(-resp_type)
+```
+
+There won't be much predictive power in these "other" values, so I will replace the nulls with the string "Other", and remove the accompanying free-form text columns.
+
+```{r}
+buffer_2 <- buffer_1 %>%
+  replace_na(list(industry = "Other",
+                  role = "Other",
+                  race = "Other/Unk",
+                  struggle = "Other",
+                  benefit = "Other",
+                  change = "Other"
+                  )) %>%
+  select(-contains("other"), other, pay_other) 
+
+dim(buffer_2)
+```
+
+Dropping these `r length(colnames(buffer_1)) - length(colnames(buffer_2))` columns reduces our data set from `r {ncol(buffer_1)} %>% scales::comma()` cols to `r {ncol(buffer_2)} %>% scales::comma()` cols.
+
+## Remove Uninteresting Cols
+
+Several questions ask about the time-zone distribution of company employees and remote-work costs covered by the company. 
+
+```{r}
+codebook %>% 
+  filter(str_detect(item, "^pay|(time_zones)|(^asynch)")) %>%
+  select(-resp_type)
+```
+
+These questions are not useful for my analysis, so I'll drop them.
+
+```{r}
+buffer_3 <- buffer_2 %>%
+  select(-starts_with(c("pay", "time", "asynch")))
+
+dim(buffer_3)
+```
+
+Dropping these `r length(colnames(buffer_2)) - length(colnames(buffer_3))` columns reduces our data set from from `r {ncol(buffer_2)} %>% scales::comma()` cols to `r {ncol(buffer_3)} %>% scales::comma()` cols.
+
+## Remove Free-Form Cols
+
+There are a few other free-form survey items. 
+
+```{r}
+codebook %>%
+  filter(item %in% c("smooth_why", "smooth_not", "change", "other")) %>%
+  select(-resp_type)
+```
+
+None of these are useful for my analysis so I will drop them too.
+
+```{r}
+buffer_4 <- buffer_3 %>%
+  select(-c(smooth_why, smooth_not, change, other))
+
+dim(buffer_4)
+```
+
+Dropping these `r length(colnames(buffer_3)) - length(colnames(buffer_4))` columns reduces our data set from `r {ncol(buffer_3)} %>% scales::comma()` to `r {ncol(buffer_4)} %>% scales::comma()` cols.
+
+## Remove Sparse Cols
+
+A few columns are more than 50% empty.
+
+```{r}
+(na_vars <- buffer_4 %>%
+   skimr::skim() %>%
+   filter(complete_rate < .5) %>% 
+   as.data.frame() %>%
+   select(skim_variable, n_missing, complete_rate))
+```
+
+Imputing values is possible, but I'm less concerned with prediction than I am with understanding variable importance. I'll remove them.
+
+```{r}
+buffer_5 <- buffer_4 %>%
+  select(-na_vars$skim_variable)
+```
+
+Dropping these `r length(colnames(buffer_4)) - length(colnames(buffer_5))` columns reduces our data set from `r {ncol(buffer_4)} %>% scales::comma()` cols to `r {ncol(buffer_5)} %>% scales::comma()` cols.
+
+## Characters to Factors
+
+Most of the character fields need to be factors if they are going to be useful in models. 
+
+```{r, class.source='fold-hide'}
+buffer_6 <- buffer_5 %>%
+  mutate(race = factor(case_when(race == "Asian or Pacific Islander" ~ "Asian",
+                                 race == "Black or African American" ~ "Black",
+                                 race == "Hispanic or Latino" ~ "Hispanic",
+                                 race == "Multiracial or Biracial" ~ "Multiracial",
+                                 race == "Native American or Alaska Native" ~ "Other/Unk",
+                                 TRUE ~ race),
+                       levels = c("White", "Black", "Hispanic", "Asian", "Multiracial", "Other/Unk")),
+         work_exp = factor(work_exp, levels = c("Less than six months",
+                                                "6 months - 11 months",
+                                                "1 year - 4 years",
+                                                "5 years - 9 years",
+                                                "10 years - 14 years", 
+                                                "15 years - 19 years",
+                                                "More than 20 years"),
+                           ordered = TRUE),
+         remote_exp = factor(remote_exp, levels = c("Less than six months",
+                                                "6 months to 11 months",
+                                                "1 year to 4 years",
+                                                "5 years - 9 years",
+                                                "More than 10 years")),
+         disability = factor(disability, levels = c(0, 1), labels = c("No", "Yes")),
+         emp_type = factor(emp_type, levels = c("Business owner", 
+                                                "Employee",
+                                                "Freelancer / Self-employed"),
+                           labels = c("Business Owner", "Employee", "Self-Employed")),
+         role = case_when(role == "Customer Support" ~ "CSR",
+                          role == "Human Resources" ~ "HR",
+                          role == "Marketing and Advertising" ~ "Marketing",
+                          TRUE ~ role),
+         role = fct_relevel(role, "Other", after = Inf),
+         covid = factor(covid, levels = c(0, 1), labels = c("Not Related", "COVID-Related")),
+         prefer_remote = factor(prefer_remote, levels = c(0, 1), labels = c("No Remote", "Prefer")),
+         recommend_remote = factor(recommend_remote, levels = c(0, 1), labels = c("No Remote", "Recommend")),
+         caregiver = factor(caregiver, 
+                            levels = c(0, 1), 
+                            labels = c("Not Caregiver", "Caregiver")),
+         benefit = factor(benefit, 
+                          levels = c("Ability to have a flexible schedule",
+                                     "Ability to spend time with family",
+                                     "Ability to work from home",
+                                     "Flexibility to work from any location",
+                                     "Not having to commute",
+                                     "Other"),
+                          labels = c("Flexible Schedule", "Time with Family",
+                                     "Work from Home", "Flexible Location",
+                                     "No Commute", "Other")),
+         industry = factor(industry),
+         fte = factor(fte, levels = c("Just me",
+                                      "Fewer than 10", 
+                                      "11 to 50",
+                                      "51 to 100",
+                                      "101 to 500", 
+                                      "501 to 1,000",
+                                      "More than 1,001")),
+         pct_remote = factor(pct_remote, levels = c("1 to 25%",
+                                                    "26 to 50%",
+                                                    "51 to 75%", 
+                                                    "76 to 99%",
+                                                    "100%")),
+         struggle = factor(struggle, 
+                           levels = c("Being in a different timezone than teammates",
+                                      "Difficulties with collaboration and communication",
+                                      "Distractions at home",
+                                      "Loneliness",
+                                      "Not being able to unplug",
+                                      "Staying motivated",
+                                      "Other"),
+                           labels = c("Timezones", "Collaboration", 
+                                      "Distractions", "Loneliness", "Unplugging",
+                                      "Motivation", "Other"))) %>%
+         select(-contains("other"), -contains("time_zones"), -starts_with("pay"))
+```
+
+## Impute Null Values
+
+Some values are null, but might be inferred as another value. I'll use the mode values for `disability` and `caregiver`.
+
+```{r}
+buffer_7 <- buffer_6 %>%
+  replace_na(list(disability = "No",
+                  caregiver = "Not Caregiver"))
+```
+
+I'll use **mice** (Multivariate Imputations by Chained Equations) to impute `fte` and `pct_remote`.  
+
+```{r}
+mice_obj <- mice(buffer_7)
+buffer_8 <- complete(mice_obj)
+```
+
+Let's see how it did.
+
+```{r, class.source='fold-hide'}
+p1 <- data.frame(original = buffer_7$fte, mice = buffer_8$fte) %>%
+  pivot_longer(cols = c("original", "mice"), names_to = "Data", values_to= "Fare") %>%
+  ggplot(aes(x = Fare, fill = Data)) + 
+  geom_bar(na.rm = TRUE, position = position_dodge()) +
+  ggthemes::scale_fill_few() +
+  theme_light() + 
+  theme(legend.position = "top",
+        axis.text.x = element_text(angle = 90)) +
+  labs(subtitle = "fte", x = NULL, y = NULL, fill = "")
+
+p2 <- data.frame(original = buffer_7$pct_remote, mice = buffer_8$pct_remote) %>%
+  pivot_longer(cols = c("original", "mice"), names_to = "Data", values_to= "Fare") %>%
+  ggplot(aes(x = Fare, fill = Data)) + 
+  geom_bar(na.rm = TRUE, position = position_dodge()) +
+  ggthemes::scale_fill_few() +
+  theme_light() + 
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 90)) +
+  labs(subtitle = "pct_remote", x = NULL, y = NULL, fill = "")
+
+p1 + p2 +
+  patchwork::plot_annotation(title = "Mice Imputations")
+```
+
+## Final Look
+
+That's it for the data cleaning. Let's have a final look at the data before moving on.
+
+```{r}
+skimr::skim(buffer_8)
+```
+
+The only remaining character type is `country`. I'll probably drop that from models. The `industry` and `role` factors have a lot of levels. I might need to collapse levels or exclude them from the model, depending on what I learn from the data exploration step.
+
+## Save Data
+
+I'll save my work for the next step.
+
+```{r}
+saveRDS(buffer_8, file = "./buffer.rds")
+saveRDS(codebook, file = "./codebook.rds")
+```
