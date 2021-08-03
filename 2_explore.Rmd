@@ -1,5 +1,5 @@
 ---
-title: "Remote Work"
+title: "Struggles with Remote Work"
 subtitle: "Section 2: Data Exploration"
 author: "Michael Foley"
 date: "8/1/2021"

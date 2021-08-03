@@ -1,2 +1,0 @@
-"0","buffer_5 <- buffer_4 %>%"
-"0","  select(-na_vars$skim_variable)"

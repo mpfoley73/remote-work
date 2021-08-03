@@ -1,4 +1,0 @@
-"0","set.seed(801)"
-"0","train_idx <- createDataPartition(buffer$struggle, p = 0.8, list = FALSE)"
-"0","dat_train <- buffer[train_idx, ]"
-"0","dat_test <- buffer[-train_idx, ]"

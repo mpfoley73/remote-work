@@ -1,3 +1,0 @@
-"0","buffer_7 <- buffer_6 %>%"
-"0","  replace_na(list(disability = ""No"","
-"0","                  caregiver = ""Not Caregiver""))"
