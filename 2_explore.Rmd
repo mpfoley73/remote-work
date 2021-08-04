@@ -226,24 +226,23 @@ buffer %>% plot_prop("role",
 What factors are likely to lead to each of the struggles?
 
 ```{r}
-# mtrx_race <- buffer %>% count(struggle, level = race) %>% 
-#   group_by(level) %>%
-#   mutate(pct = n / sum(n)) %>%
-#   filter(n >= 10 & )
-#   pivot_wider(names_from = struggle, values_from = n) %>% 
-#   mutate(level = as.character(level))
-# mtrx_work <- buffer %>% count(struggle, level = work_exp) %>% 
-#   pivot_wider(names_from = struggle, values_from = n) %>% 
-#   mutate(level = as.character(level)
-# 
-# mtrx <- bind_rows(Race = mtrx_race,
-#                   `Work Experience` = mtrx_work,
-#                   .id = "Factor")
-# 
-# mtrx %>%
-#   flextable() %>%
-#   merge_v(j = 1) %>%
-#   autofit() %>%
-#   theme_zebra()
+struggle_prop <- function(fctr) {
+  fctr_var <- ensym(fctr)
+  buffer %>% 
+    filter(struggle != "Other") %>%
+    count(level = !!fctr_var, struggle) %>%
+    group_by(level) %>%
+    mutate(fct = fctr, pct = n / sum(n)) %>%
+    pivot_wider(id_cols = c(fct, level), names_from = struggle, values_from = pct) %>%
+    mutate(level = as.character(level))
+}
+
+smry_mtrx <- bind_rows(
+  struggle_prop("race"),
+  struggle_prop("work_exp")
+)
+
+smry_mtrx
+
 ```
 
