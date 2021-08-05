@@ -223,26 +223,52 @@ buffer %>% plot_prop("role",
 
 ## Conclusions
 
-What factors are likely to lead to each of the struggles?
+What factors are likely to lead to each of the struggles? The table below shows the distribution of struggles for each group of each variable. Struggles that map strongly, which I define as >25% to any struggle are colored blue. Unfortunately, most factor levels map strongly only to *Unplugging*.
 
 ```{r}
 struggle_prop <- function(fctr) {
   fctr_var <- ensym(fctr)
   buffer %>% 
     filter(struggle != "Other") %>%
-    count(level = !!fctr_var, struggle) %>%
-    group_by(level) %>%
-    mutate(fct = fctr, pct = n / sum(n)) %>%
-    pivot_wider(id_cols = c(fct, level), names_from = struggle, values_from = pct) %>%
-    mutate(level = as.character(level))
+    count(Level = !!fctr_var, struggle) %>%
+    group_by(Level) %>%
+    mutate(Factor = fctr, pct = n / sum(n)) %>%
+    pivot_wider(id_cols = c(Factor, Level), names_from = struggle, values_from = pct) %>%
+    mutate(Level = as.character(Level))
 }
 
 smry_mtrx <- bind_rows(
   struggle_prop("race"),
-  struggle_prop("work_exp")
-)
+  struggle_prop("work_exp"),
+  struggle_prop("remote_exp"),
+  struggle_prop("emp_type"),
+  struggle_prop("pct_remote"),
+  struggle_prop("covid"),
+  struggle_prop("disability"),
+  struggle_prop("caregiver"),
+  struggle_prop("fte"),
+  struggle_prop("industry"),
+  struggle_prop("role")
+) %>%
+  pivot_longer(cols = Timezones:Motivation, names_to = "struggle") %>%
+  mutate(color = if_else(value > 1/4, "dodgerblue", "darkgray"))
 
-smry_mtrx
+color_wide <- smry_mtrx %>% 
+  pivot_wider(id_cols = c(Factor, Level), names_from = struggle, values_from = color) %>%
+  as.matrix()
 
+smry_mtrx %>%
+  mutate(value = value * 100) %>%
+  pivot_wider(id_cols = c(Factor, Level), names_from = struggle, values_from = value) %>%
+  flextable::as_grouped_data(groups = "Factor") %>%
+  flextable::flextable() %>%
+  flextable::color(i = ~ is.na(Factor), j = 3:8, color = color_wide[, 3:8]) %>%
+  flextable::bg(i = ~ !is.na(Factor), bg = "lightgray") %>%
+  flextable::colformat_double(j = 3:8, digits = 0, suffix = "%") %>%
+  flextable::border(j = 2, border.right = officer::fp_border(color = "lightgray")) %>%
+  flextable::autofit() %>%
+  flextable::bold(j = 1:2) %>%
+  flextable::fontsize(size = 10) %>%
+  flextable::autofit()
 ```
 

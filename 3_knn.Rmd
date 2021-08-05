@@ -1,5 +1,6 @@
 ---
-title: "KNN"
+title: "Struggles with Remote Work"
+subtitle: "Section 3: kNN"
 author: "Michael Foley"
 date: "8/1/2021"
 output: 
@@ -17,7 +18,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r warning=FALSE, message=FALSE}
+```{r warning=FALSE, message=FALSE, class.source='fold-hide'}
 library(tidyverse)
 library(ggtext)
 library(janitor)
@@ -29,9 +30,9 @@ buffer <- readRDS("./buffer.rds")
 codebook <- readRDS("./codebook.rds")
 ```
 
-K-nearest neighbors (KNN) algorithm is a type of supervised ML algorithm that classifies observations by the "majority vote" of its *k* nearest neighbors. The value of *k* is a hyperparameter to optimize.
+The *k*-nearest neighbors (kNN) algorithm is a type of supervised ML algorithm that classifies observations by the "majority vote" of the *k* nearest neighbors. The value of *k* is a hyperparameter to optimize.
 
-KNN is a non-parametric model, meaning it makes no assumptions about the underlying data. This is often an advantage in cases where data does not follow standard distributions. KNN is also "lazy" algorithm in that it uses the training data set data to classify future responses rather than using it to create classification rules.
+kNN is a non-parametric model, meaning it makes no assumptions about the underlying data. This is often an advantage in cases where data does not follow standard distributions. kNN is also "lazy" algorithm in that it uses the training data set data to classify future responses rather than using it to create classification rules. The qualities make kNN relatively straight-forward to understand.
 
 ## Set Up Workflow
 
@@ -57,10 +58,10 @@ train_control <- trainControl(
 
 ## Prep Model
 
-My model data set variables are `struggle` + and 15 predictors. I'll drop the character `country` column, plus the less-informative `role` and `industry` columns.
+My model data set variables are the outcome variable `struggle` plus 15 predictors. I'll drop the character `country` column, plus the less-informative `role` and `industry` columns, leaving `struggle` plus 12 predictors.
 
 ```{r}
-mdl_vars <- dat_train %>% select(-c(country, role, industry)) %>% colnames()
+mdl_vars <- dat_train %>% select(struggle, everything(), -c(country, role, industry)) %>% colnames()
 mdl_vars
 ```
 
@@ -73,30 +74,20 @@ rcpe <- recipe(struggle ~ ., data = dat_train[, mdl_vars]) %>%
   step_scale(all_predictors())
 
 prep(rcpe, training = dat_train)
-dat_train %>% select(all_nominal())
 ```
 
 ## Fit KNN
 
-The KNN model has a single hyperparameter to fit: *K*.
+The KNN model has a single hyperparameter to fit: *k*.
 
 ```{r message=FALSE}
 set.seed(1970)
-# mdl_knn <- train(
-#   rcpe,
-#   data = dat_train[, mdl_vars],
-#   # method = "knn",
-#   method = "rpart",
-#   trControl = train_control,
-#   tuneGrid = expand.grid(k = c(25, 50, 100, 150, 200, 250, 300, 350)),
-#   metric = "Accuracy"
-# )
 mdl_knn <- train(
   rcpe,
   data = dat_train[, mdl_vars],
-  method = "rpart",
+  method = "knn",
   trControl = train_control,
-  tuneLength = 5,
+  tuneGrid = expand.grid(k = c(25, 50, 100, 150, 200, 250, 300, 350)),
   metric = "Accuracy"
 )
 
@@ -111,32 +102,45 @@ plot(mdl_knn)
 
 ## Resampling Performance
 
-The accuracy from the confusion matrix is 0.8403.
+The confusion matrix compares the predicted to actual values from the 10-CV at the optimal *k*.
 
 ```{r}
-confusionMatrix(mdl_knn)
+(confusion <- confusionMatrix(mdl_knn))
 ```
+
+The model basically predicts *Unplugging* all the time (`r scales::percent(sum(confusion$table[5, ]) / 100, accuracy = .1)`). Not a bad guess, really. 
 
 ## Holdout Performance
 
-Here is the model performance on the holdout data set.
+Here is the model performance on the test data set.
 
 ```{r}
 preds_knn <- bind_cols(
-  dat_test,
-  predict(mdl_knn, newdata = dat_test, type = "prob"),
+  # dat_test,
+  # predict(mdl_knn, newdata = dat_test, type = "prob"),
   Predicted = predict(mdl_knn, newdata = dat_test, type = "raw"),
   Actual = dat_test$struggle
 )
 
-confusionMatrix(preds_knn$Predicted, 
-                reference = preds_knn$Actual)
+(confusion_test <- confusionMatrix(preds_knn$Predicted, reference = preds_knn$Actual))
 ```
+
+Predictably, it predicted *Unplugging* (`r scales::percent(sum(confusion_test$table[5, ]) / sum(confusion_test$table), accuracy = .1)`) of the time, and was able to score an overall accuracy of `r scales::percent(confusion_test$overall["Accuracy"])`.
+
 ## Model Evaluation
 
-`varImp()` ranks the predictors by the sum of the reduction in the loss function attributed to each variable at each split. The most important variable here was `FarePerPass`. In the straight logistic regression model, it was `NetSurv`, followed by `Pclass`.
+I'm not sure how variable importance is calculated for kNN. The matrix below places high importance on whether remote work stemmed from the COVID pandemic.
 
-```{r fig.height=100, fig.width=15}
-plot(varImp(mdl_knn), main = "Boosting Variable Importance")
+```{r fig.height=10, fig.width=8.2}
+varImp(mdl_knn) %>%
+  pluck("importance") %>%
+  rownames_to_column(var = "FactorLevel") %>%
+  pivot_longer(-FactorLevel) %>%
+  ggplot(aes(x = name, y = fct_rev(FactorLevel))) +
+  geom_tile(aes(fill = value), show.legend = FALSE) +
+  geom_text(aes(label = round(value, 0)), size = 3) +
+  theme_light() +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(title = "Variable Importance", y = NULL, x = NULL)
 ```
 
